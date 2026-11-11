@@ -1,0 +1,191 @@
+<!DOCTYPE html> 
+<html lang="ru"
+<head>
+    <meta charset="UTF-8">
+    <title>Мой TO-DO List</title>
+    <style>
+        body {
+            font-family: Arial, sens-serif;
+            padding: 20px;
+            background-image: url('https://images.wallpaperscraft.ru/image/single/enot_zhivotnoe_podvodnyj_1343115_3840x2160.jpg');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-color: #2c3e50;
+            background-position: center;
+            background-attachment: fixed;   
+        }
+        .container {max-width: 500px; margin: 0 auto; background: white; padding: 20px;border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);}
+        h1 {text-align: center; color: #333;}
+        input{width: 70%; padding: 10px; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px;}
+        button { padding: 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;}
+        button:hover {background: #218838;}
+        ul {list-style-type: none; padding: 0;}
+        li {padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;}
+        .done {text-decoration: line-through; color: gray;}
+    </style>
+</head>
+<boby>
+    <div class="container">
+        <div id="loginSection">
+            <h1>Вход в систему</h1>
+            <div>
+                <input type="text" id="loginUsername" placeholder="Логин">
+                <input type="password" id="loginPassword" placeholder="Пароль">
+                <button onclick="login()">Войти</button>
+            </div>
+        </div>
+        <div id="appSection" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h1>Список задач</h1>
+                <button onclick="logout()" style="background: gray;">Войти</button>
+            </div>
+            <div>
+                <input type="text" id="taskInput" placeholder="Что нужно зделать? ">
+                <button onclick="addTask()">Добавить</button>
+                
+            </div>
+            <ul id="taskList"></ul>
+        </div>
+    </div>    
+            
+        <script>
+            
+        function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/login', true);
+            
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    // Сохраняем токен в память браузера!
+                    localStorage.setItem('token', response.access_token);
+                    
+                    // Прячем форму входа, показываем задачи
+                    document.getElementById('loginSection').style.display = 'none';
+                    document.getElementById('appSection').style.display = 'block';
+                    loadTasks(); // Загружаем задачи
+                } else {
+                    alert("Неверный логин или пароль!");
+                }
+            };
+            xhr.send(`grent_type=password&username=${username}&password=${password}`);
+        }
+
+        // 2. Функция выхода
+        function logout() {
+            localStorage.removeItem('token'); // Удаляем токен
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('appSection').style.display = 'none';
+        }
+
+        // 3. Загрузка задач
+        function loadTasks() {
+            const token = localStorage.getItem('token');
+            if (!token) return; // Если нет токена, ничего не делаем
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/tasks', true);
+            xhr.setRequestHeader('Authorization', 'Bearer ' + token); // ПРИКРЕПЛЯЕМ ТОКЕН!
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const tasks = JSON.parse(xhr.responseText);
+                    const list = document.getElementById('taskList');
+                    list.innerHTML = '';
+
+                    tasks.forEach(task => {
+                        const li = document.createElement('li');
+                        li.textContent = task.name;
+                        if (task.done) li.className = 'done';
+
+                        // Кнопка "Выполнено"
+                        const doneBtn = document.createElement('button');
+                        doneBtn.textContent = 'V';
+                        doneBtn.style.background = 'green';
+                        doneBtn.style.marginLeft = '10px';
+                        doneBtn.onclick = () => markTaskDone(task.id);
+                        
+                        // Кнопка "Удалить"
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.textContent = 'X';
+                        deleteBtn.style.background = 'red';
+                        deleteBtn.style.marginLeft = '10px';
+                        deleteBtn.onclick = () => deleteTask(task.id);
+
+                        li.appendChild(doneBtn);
+                        li.appendChild(deleteBtn);
+                        list.appendChild(li);
+                    });
+                } else if (xhr.status === 401) {
+                    logout(); // Если токен просрочен, разлогиниваем
+                }
+            };
+            xhr.send();
+        }
+
+        // 4. Добавление задачи
+        function addTask() {
+            const token = localStorage.getItem('token');
+            const input = document.getElementById('taskInput');
+            const taskName = input.value;
+            if (!taskName) return;
+
+            const xhr = new XMLHttpRequest();
+             xhr.open('POST', '/tasks', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Authorization', 'Bearer ' + token); // ПРИКРЕПЛЯЕМ ТОКЕН!
+            
+            xhr.onload = function() {
+                if (xhr.status === 200 || xhr.status === 201) {
+                    input.value = '';
+                    loadTasks();
+                }
+            };
+            xhr.send(JSON.stringify({ name: taskName }));
+        }
+
+        // 5. Отметка о выполнении
+        function markTaskDone(id) {
+            const token = localStorage.getItem('token');
+            const xhr = new XMLHttpRequest();
+            xhr.open('PATCH', '/tasks/' + id, true);
+            xhr.setRequestHeader('Authorization', 'Bearer ' + token); // ПРИКРЕПЛЯЕМ ТОКЕН!
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    loadTasks();
+                }
+            };
+            xhr.send();
+        }
+
+        // 6. Удаление
+        function deleteTask(id) {
+            const token = localStorage.getItem('token');
+            const xhr = new XMLHttpRequest();
+            xhr.open('DELETE', '/tasks/' + id, true);
+            xhr.setRequestHeader('Authorization', 'Bearer ' + token); // ПРИКРЕПЛЯЕМ ТОКЕН!
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    loadTasks();
+                }
+            };
+            xhr.send();
+        }
+
+        
+        if (localStorage.getItem('token')) {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('appSection').style.display = 'block';
+            loadTasks();
+        }
+        
+        </script>
+</boby>
+</html>
